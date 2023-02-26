@@ -15,20 +15,18 @@ import (
 )
 
 var (
-	token string
+	token = os.Getenv("GH_TOKEN")
 	org   string
 	out   string
 )
 
 func init() {
-	pflag.StringVarP(&token, "token", "t", "", "GitHub Access Token")
 	pflag.StringVar(&org, "org", "", "Name of GitHub organization")
 	pflag.StringVarP(&out, "out", "o", "data", "Output directory")
 }
 
 func main() {
 	pflag.Parse()
-
 	if org == "" {
 		log.Fatalln("Error: flag -org is not set")
 	}
