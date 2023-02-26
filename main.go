@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/google/go-github/v50/github"
@@ -100,29 +101,38 @@ func cloneRepo(name string) error {
 			Password: token,
 		}
 	}
+	url := fmt.Sprintf("https://github.com/%s/%s", org, name)
 
-	if _, err := os.Stat(filepath.Join(repoPath, "config")); os.IsNotExist(err) {
+	var err error
+	var repo *git.Repository
+	if _, err = os.Stat(filepath.Join(repoPath, "config")); os.IsNotExist(err) {
 		log.Printf("Cloning repo %s/%s", org, name)
-		_, err = git.PlainClone(repoPath, true, &git.CloneOptions{
-			URL:  fmt.Sprintf("https://github.com/%s/%s", org, name),
-			Auth: auth,
+		repo, err = git.PlainClone(repoPath, true, &git.CloneOptions{
+			URL:        url,
+			Auth:       auth,
+			RemoteName: "origin",
 		})
 		if err != nil {
 			return err
 		}
 	} else {
 		log.Printf("Fetching repo %s/%s", org, name)
-		repo, err := git.PlainOpen(repoPath)
-		if err != nil {
-			return err
-		}
-		err = repo.Fetch(&git.FetchOptions{
-			Auth:  auth,
-			Force: true,
-		})
-		if err != nil && err != git.NoErrAlreadyUpToDate {
-			return err
-		}
+		repo, err = git.PlainOpen(repoPath)
+	}
+	if err != nil {
+		return err
+	}
+
+	err = repo.Fetch(&git.FetchOptions{
+		RemoteURL: url,
+		Auth:      auth,
+		Force:     true,
+		// https://github.com/go-git/go-git/issues/293#issuecomment-1065877209
+		RefSpecs: []config.RefSpec{"+refs/*:refs/*"},
+	})
+
+	if err != nil && err != git.NoErrAlreadyUpToDate {
+		return err
 	}
 	return nil
 }
