@@ -104,24 +104,48 @@ func cloneRepo(name string) error {
 			return err
 		}
 
-		cmd := exec.Command("git",
-			"-c", fmt.Sprintf(`remote."origin".url=%s`, authUrl),
-			"clone", "--quiet", "--mirror", url, ".")
+		cmd := exec.Command("git", "clone", "--quiet", "--mirror", authUrl, ".")
 		cmd.Dir = repoPath
 		if err = cmd.Run(); err != nil {
 			return err
+		}
+
+		if authUrl != url {
+			cmd = exec.Command("git", "remote", "set-url", "origin", url)
+			cmd.Dir = repoPath
+			if err = cmd.Run(); err != nil {
+				return err
+			}
 		}
 	} else {
 		log.Printf("Updating repo %s/%s", org, name)
 
-		cmd := exec.Command("git",
-			"-c", fmt.Sprintf(`remote."origin".url=%s`, authUrl),
-			"remote", "update", "--prune")
+		// set url with credentials
+		if authUrl != url {
+			cmd := exec.Command("git", "remote", "set-url", "origin", authUrl)
+			cmd.Dir = repoPath
+			if err = cmd.Run(); err != nil {
+				return err
+			}
+		}
+
+		// updaet repository
+		cmd := exec.Command("git", "remote", "update", "--prune")
 		cmd.Dir = repoPath
 		if err = cmd.Run(); err != nil {
 			return err
 		}
 
+		// remove credentials from url
+		if authUrl != url {
+			cmd = exec.Command("git", "remote", "set-url", "origin", url)
+			cmd.Dir = repoPath
+			if err = cmd.Run(); err != nil {
+				return err
+			}
+		}
+
+		// Run gc
 		cmd = exec.Command("git",
 			"-c", "gc.auto=1000",
 			"-c", "gc.autoPackLimit=10",
