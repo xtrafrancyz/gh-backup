@@ -4,6 +4,8 @@ It can only be used to clone all repositories in an organization. With subsequen
 
 ## Installation
 
+Install [git](https://git-scm.com/) and [Go](https://go.dev/doc/install). Then run:
+
 ```
 go install https://github.com/xtrafrancyz/gh-backup@latest
 ```

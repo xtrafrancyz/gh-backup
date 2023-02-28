@@ -5,12 +5,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 
-	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/config"
-	"github.com/go-git/go-git/v5/plumbing/transport"
-	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/google/go-github/v50/github"
 	"github.com/spf13/pflag"
 )
@@ -94,45 +91,47 @@ func listRepos(client *github.Client) ([]*github.Repository, error) {
 func cloneRepo(name string) error {
 	repoPath := filepath.Join(out, name)
 
-	var auth transport.AuthMethod
+	url := fmt.Sprintf("https://github.com/%s/%s.git", org, name)
+	authUrl := url
 	if token != "" {
-		auth = &http.BasicAuth{
-			Username: "abc123", // yes, this can be anything except an empty string
-			Password: token,
-		}
+		authUrl = fmt.Sprintf("https://123asd:%s@github.com/%s/%s.git", token, org, name)
 	}
-	url := fmt.Sprintf("https://github.com/%s/%s", org, name)
 
-	var err error
-	var repo *git.Repository
-	if _, err = os.Stat(filepath.Join(repoPath, "config")); os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(repoPath, "config")); os.IsNotExist(err) {
 		log.Printf("Cloning repo %s/%s", org, name)
-		repo, err = git.PlainClone(repoPath, true, &git.CloneOptions{
-			URL:        url,
-			Auth:       auth,
-			RemoteName: "origin",
-		})
-		if err != nil {
+
+		if err = os.MkdirAll(repoPath, 0644); err != nil {
+			return err
+		}
+
+		cmd := exec.Command("git",
+			"-c", fmt.Sprintf(`remote."origin".url=%s`, authUrl),
+			"clone", "--quiet", "--mirror", url, ".")
+		cmd.Dir = repoPath
+		if err = cmd.Run(); err != nil {
 			return err
 		}
 	} else {
-		log.Printf("Fetching repo %s/%s", org, name)
-		repo, err = git.PlainOpen(repoPath)
-	}
-	if err != nil {
-		return err
+		log.Printf("Updating repo %s/%s", org, name)
+
+		cmd := exec.Command("git",
+			"-c", fmt.Sprintf(`remote."origin".url=%s`, authUrl),
+			"remote", "update", "--prune")
+		cmd.Dir = repoPath
+		if err = cmd.Run(); err != nil {
+			return err
+		}
+
+		cmd = exec.Command("git",
+			"-c", "gc.auto=1000",
+			"-c", "gc.autoPackLimit=10",
+			"-c", "gc.autoDetach=false",
+			"gc", "--auto", "--quiet")
+		cmd.Dir = repoPath
+		if err = cmd.Run(); err != nil {
+			return err
+		}
 	}
 
-	err = repo.Fetch(&git.FetchOptions{
-		RemoteURL: url,
-		Auth:      auth,
-		Force:     true,
-		// https://github.com/go-git/go-git/issues/293#issuecomment-1065877209
-		RefSpecs: []config.RefSpec{"+refs/*:refs/*"},
-	})
-
-	if err != nil && err != git.NoErrAlreadyUpToDate {
-		return err
-	}
 	return nil
 }
